@@ -10,16 +10,15 @@ import(
 type TreeNode struct{
   Sidx  int
   Eidx  int
-  words string
   SuffixLink *TreeNode
   Child map[string]*TreeNode
 }
 
 type SuffixTree struct {
   Root *TreeNode
-  // // for search convert frist char to idx of root childs
-  // Edge map[string]int
 
+  // raw words
+  Words string
   // # = 3, active_point = (root, '\0x', 1), remainder = 1
   CurStep int // #
   // 活动点（active point），是一个三元组，包括（Activenode, Activeedge, Activelength）
@@ -33,24 +32,27 @@ type SuffixTree struct {
 func New() *SuffixTree{
   return &SuffixTree{
     Root: &TreeNode{Sidx: 0, Eidx: 0, Child: make(map[string]*TreeNode)},
-    CurStep: 0,
+    CurStep: -1,
     ActiveNode: nil,
     ActiveEdge: "",
     ActiveLen: 0,
     //剩余后缀数（remainder），是一个整数，代表着还需要插入多少个新的后缀
     Remainder: 1,
+    Words: "",
   }
 }
 
 
 func (st *SuffixTree) Build(str string) {
+  st.Reset()
+  st.Words += str
   // prepare for chisese sentence
   sentence := []rune(str)
 
   root := st.Root
   //fmt.Println("rune=", string(sentence[0]))
-  for index, value := range sentence {
-    st.CurStep = index
+  for _, value := range sentence {
+    st.CurStep += 1
     word := string(value)
 
     // if cur word is frist word of suffix in one edge in cur root
@@ -65,19 +67,24 @@ func (st *SuffixTree) Build(str string) {
 
     // if cur word is not in the root child and is also not a suffix, then add a child
     if _, ok := root.Child[word]; !ok && st.Remainder == 1 {
-      child := st.NewChild(index)
+      child := st.NewChild(st.CurStep, 0)
       root.Child[word] = child
       fmt.Println("add new child " + word)
       continue
     }
 
     // if cur word is included by a child then add modify the variables
-    if st.Remainder > 1 && value == sentence[st.ActiveNode.Sidx+st.ActiveLen] {
+    //nodeLen := len(st.ActiveNode.Child[st.ActiveEdge].Words)
+    if st.Remainder > 1 && value == []rune(st.Words)[st.ActiveNode.Child[st.ActiveEdge].Sidx+st.ActiveLen] {
       st.Remainder += 1
       st.ActiveLen += 1
       nodeLen := st.ActiveNode.Child[st.ActiveEdge].Eidx - st.ActiveNode.Child[st.ActiveEdge].Sidx
       if nodeLen > 0 &&  st.ActiveLen > nodeLen {
         st.ActiveNode = st.ActiveNode.Child[st.ActiveEdge]
+        if st.ActiveNode.Child[word] == nil {
+          child := st.NewChild(st.CurStep, 0)
+          st.ActiveNode.Child[word] = child
+        }
         st.ActiveEdge = word
         st.ActiveLen = 1
       }
@@ -90,21 +97,23 @@ func (st *SuffixTree) Build(str string) {
     for st.Remainder >= 1 {
       // insert root node child
       if st.Remainder == 1 {
-        child := st.NewChild(index)
-        root.Child[word] = child
         st.ActiveEdge = ""
-        fmt.Println("add new child " + word)
-        fmt.Printf("#:%d ActiveEdge:%s ActiveLen:%d Remainder:%d\n", st.CurStep, st.ActiveEdge, st.ActiveLen, st.Remainder)
+        if root.Child[word] == nil {
+          child := st.NewChild(st.CurStep, 0)
+          root.Child[word] = child
+          fmt.Println("add new child " + word)
+          fmt.Printf("#:%d ActiveEdge:%s ActiveLen:%d Remainder:%d\n", st.CurStep, st.ActiveEdge, st.ActiveLen, st.Remainder)
+        }
         break
       }
 
       // current split node
       curSplit := st.ActiveNode.Child[st.ActiveEdge]
-      st.Split(curSplit, str)
+      st.Split(curSplit, st.Words)
 
       // update active point
       st.Remainder -= 1
-      lastword := sentence[st.CurStep-st.Remainder+1]
+      lastword := []rune(st.Words)[st.CurStep-st.Remainder+1]
       suffixLink := st.ActiveNode.SuffixLink
       if st.ActiveNode == root {
         /*  Rule 1:
@@ -140,42 +149,54 @@ func (st *SuffixTree) Build(str string) {
       fmt.Printf("#:%d ActiveEdge:%s ActiveLen:%d Remainder:%d\n", st.CurStep, st.ActiveEdge, st.ActiveLen, st.Remainder)
     }
   }
+  st.Print(st.Words)
 }
 
 func (st *SuffixTree) Split(node *TreeNode, str string) {
-  node.Eidx = node.Sidx + st.ActiveLen
-  child1 := st.NewChild(node.Eidx)
-  child2 := st.NewChild(st.CurStep)
-
   sentence := []rune(str)
-  node.Child[string(sentence[node.Eidx])] = child1
+
+  if node.Child[string(sentence[node.Sidx + st.ActiveLen])] == nil {
+    child1 := st.NewChild(node.Sidx + st.ActiveLen, node.Eidx)
+    node.Eidx = node.Sidx + st.ActiveLen
+    node.Child[string(sentence[node.Eidx])] = child1
+  }
+  child2 := st.NewChild(st.CurStep, 0)
   node.Child[string(sentence[st.CurStep])] = child2
+
+
   fmt.Println("add new child " + string(sentence[node.Eidx]))
   fmt.Println("add new child " + string(sentence[st.CurStep]))
 }
 
-func (st *SuffixTree) NewChild(index int) *TreeNode{
+func (st *SuffixTree) NewChild(s, e int) *TreeNode{
   return &TreeNode{
-    Sidx: index,
-    Eidx: 0,
-    words: "",
+    Sidx: s,
+    Eidx: e,
     SuffixLink: nil,
     Child: make(map[string]*TreeNode),
   }
 }
 
-func (st *SuffixTree) Print(str string) {
-  sentence := []rune(str)
-  print(st.Root, sentence, 0)
+func (st *SuffixTree) Reset(){
+  st.ActiveNode = nil
+  st.ActiveEdge = ""
+  st.ActiveLen = 0
+  //剩余后缀数（remainder），是一个整数，代表着还需要插入多少个新的后缀
+  st.Remainder = 1
 }
 
-func print(root *TreeNode, sentence []rune, ph int) {
+func (st *SuffixTree) Print(str string) {
+  sentence := []rune(str)
+  print(st.Root, sentence, 0, st.CurStep+1)
+  fmt.Printf("len%*s->%d %d\n", 1*4, "", len(st.Root.Child), len(str))
+}
+
+func print(root *TreeNode, sentence []rune, ph, idx int) {
   for _, node := range root.Child {
     if node.Eidx == 0 {
-      fmt.Printf("%*s->%s\n", ph*4, "", string(sentence[node.Sidx:]))
-    } else {
-      fmt.Printf("%*s->%s\n", ph*4, "", string(sentence[node.Sidx:node.Eidx]))
+      node.Eidx = idx
     }
-    print(node, sentence, ph+1)
+    fmt.Printf("%*s->%s\n", ph*4, "", string(sentence[node.Sidx:node.Eidx]))
+    print(node, sentence, ph+1, idx)
   }
 }
