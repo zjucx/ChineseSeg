@@ -79,12 +79,8 @@ func (st *SuffixTree) Build(str string) {
       st.Remainder += 1
       st.ActiveLen += 1
       nodeLen := st.ActiveNode.Child[st.ActiveEdge].Eidx - st.ActiveNode.Child[st.ActiveEdge].Sidx
-      if nodeLen > 0 &&  st.ActiveLen > nodeLen {
+      if nodeLen > 0 &&  st.ActiveLen > nodeLen && st.ActiveNode.Child[st.ActiveEdge] != nil {
         st.ActiveNode = st.ActiveNode.Child[st.ActiveEdge]
-        if st.ActiveNode.Child[word] == nil {
-          child := st.NewChild(st.CurStep, 0)
-          st.ActiveNode.Child[word] = child
-        }
         st.ActiveEdge = word
         st.ActiveLen = 1
       }
@@ -155,16 +151,18 @@ func (st *SuffixTree) Build(str string) {
 func (st *SuffixTree) Split(node *TreeNode, str string) {
   sentence := []rune(str)
 
-  if node.Child[string(sentence[node.Sidx + st.ActiveLen])] == nil {
+  if node.Sidx + st.ActiveLen != node.Eidx {
     child1 := st.NewChild(node.Sidx + st.ActiveLen, node.Eidx)
     node.Eidx = node.Sidx + st.ActiveLen
+    tmp := child1.Child
+    child1.Child = node.Child
+    node.Child = tmp
     node.Child[string(sentence[node.Eidx])] = child1
+    fmt.Println("add new child " + string(sentence[node.Eidx]))
   }
   child2 := st.NewChild(st.CurStep, 0)
   node.Child[string(sentence[st.CurStep])] = child2
 
-
-  fmt.Println("add new child " + string(sentence[node.Eidx]))
   fmt.Println("add new child " + string(sentence[st.CurStep]))
 }
 
