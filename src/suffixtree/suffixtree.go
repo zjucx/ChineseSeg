@@ -79,7 +79,7 @@ func (st *SuffixTree) Build(str string) {
       st.Remainder += 1
       st.ActiveLen += 1
       nodeLen := st.ActiveNode.Child[st.ActiveEdge].Eidx - st.ActiveNode.Child[st.ActiveEdge].Sidx
-      if nodeLen > 0 &&  st.ActiveLen > nodeLen && st.ActiveNode.Child[st.ActiveEdge] != nil {
+      if nodeLen > 0 &&  st.ActiveLen > nodeLen {
         st.ActiveNode = st.ActiveNode.Child[st.ActiveEdge]
         st.ActiveEdge = word
         st.ActiveLen = 1
@@ -97,14 +97,17 @@ func (st *SuffixTree) Build(str string) {
         if root.Child[word] == nil {
           child := st.NewChild(st.CurStep, 0)
           root.Child[word] = child
-          fmt.Println("add new child " + word)
-          fmt.Printf("#:%d ActiveEdge:%s ActiveLen:%d Remainder:%d\n", st.CurStep, st.ActiveEdge, st.ActiveLen, st.Remainder)
+          fmt.Println("last add new child " + word)
         }
         break
       }
 
       // current split node
       curSplit := st.ActiveNode.Child[st.ActiveEdge]
+      if curSplit == nil {
+        st.Reset()
+        break
+      }
       st.Split(curSplit, st.Words)
 
       // update active point
@@ -152,18 +155,18 @@ func (st *SuffixTree) Split(node *TreeNode, str string) {
   sentence := []rune(str)
 
   if node.Sidx + st.ActiveLen != node.Eidx {
-    child1 := st.NewChild(node.Sidx + st.ActiveLen, node.Eidx)
+    child1 := st.NewChild(node.Sidx + st.ActiveLen, 0)
     node.Eidx = node.Sidx + st.ActiveLen
     tmp := child1.Child
     child1.Child = node.Child
     node.Child = tmp
     node.Child[string(sentence[node.Eidx])] = child1
-    fmt.Println("add new child " + string(sentence[node.Eidx]))
+    fmt.Println("split add new child1 " + string(sentence[node.Eidx]))
   }
   child2 := st.NewChild(st.CurStep, 0)
   node.Child[string(sentence[st.CurStep])] = child2
 
-  fmt.Println("add new child " + string(sentence[st.CurStep]))
+  fmt.Println("split add new child2 " + string(sentence[st.CurStep]))
 }
 
 func (st *SuffixTree) NewChild(s, e int) *TreeNode{
@@ -186,15 +189,45 @@ func (st *SuffixTree) Reset(){
 func (st *SuffixTree) Print(str string) {
   sentence := []rune(str)
   print(st.Root, sentence, 0, st.CurStep+1)
-  fmt.Printf("len%*s->%d %d\n", 1*4, "", len(st.Root.Child), len(str))
+  //fmt.Printf("len%*s->%d %s\n", 1*4, "", len(st.Root.Child), str)
 }
 
 func print(root *TreeNode, sentence []rune, ph, idx int) {
   for _, node := range root.Child {
-    if node.Eidx == 0 {
-      node.Eidx = idx
+    //fmt.Printf("Sidx:%d Eidx:%d len:%d\n", node.Sidx, node.Eidx, len(sentence))
+    if node.Eidx != 0 {
+      //node.Eidx = idx
+      fmt.Printf("%*s->%s Sidx:%d Eidx:%d len:%d\n", ph*4, "", string(sentence[node.Sidx:node.Eidx]), node.Sidx, node.Eidx, len(sentence))
+    } else if node.Eidx == 0 && idx - node.Sidx < 12 {
+      fmt.Printf("%*s->%s Sidx:%d Eidx:%d len:%d\n", ph*4, "", string(sentence[node.Sidx:idx]), node.Sidx, node.Eidx, len(sentence))
     }
-    fmt.Printf("%*s->%s\n", ph*4, "", string(sentence[node.Sidx:node.Eidx]))
     print(node, sentence, ph+1, idx)
   }
+}
+
+func (st *SuffixTree) Query(str string) int{
+  sentence := []rune(str)
+  node := st.Root.Child[string(sentence[0])]
+  nodeLen := 0
+
+  for index, value := range str {
+    if value == st.Words[node.Sidx+index] {
+      nodeLen += node.Eidx - node.Sidx
+      if index > nodeLen-1 {
+        node = node.Child[string(value)]
+        if node == nil {
+          return 0
+        }
+      }
+    }
+  }
+  return count(node)
+}
+
+func count(root *TreeNode) int {
+  cnt := 0
+  for _, node := range root.Child {
+    cnt += count(node)
+  }
+  return cnt
 }
